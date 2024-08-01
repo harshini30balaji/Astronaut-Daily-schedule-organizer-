@@ -1,0 +1,170 @@
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
+// Observer Interface
+interface Observer {
+    void update(String message);
+}
+
+// Task class
+class Task {
+    private String description;
+    private LocalTime startTime;
+    private LocalTime endTime;
+    private String priority;
+
+    public Task(String description, String startTime, String endTime, String priority) {
+        this.description = description;
+        this.startTime = LocalTime.parse(startTime);
+        this.endTime = LocalTime.parse(endTime);
+        this.priority = priority;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public LocalTime getStartTime() {
+        return startTime;
+    }
+
+    public LocalTime getEndTime() {
+        return endTime;
+    }
+
+    public String getPriority() {
+        return priority;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s - %s: %s [%s]", startTime, endTime, description, priority);
+    }
+}
+
+// ScheduleManager class (Singleton)
+class ScheduleManager implements Observer {
+    private static ScheduleManager instance;
+    private List<Task> tasks = new ArrayList<>();
+    private List<Observer> observers = new ArrayList<>();
+
+    private ScheduleManager() {}
+
+    public static synchronized ScheduleManager getInstance() {
+        if (instance == null) {
+            instance = new ScheduleManager();
+        }
+        return instance;
+    }
+
+    public String addTask(Task task) {
+        if (isTimeConflict(task)) {
+            String message = "Error: Task conflicts with existing task.";
+            notifyObservers(message);
+            return message;
+        }
+        tasks.add(task);
+        Collections.sort(tasks, Comparator.comparing(Task::getStartTime));
+        String message = "Task added successfully. No conflicts.";
+        notifyObservers(message);
+        return message;
+    }
+
+    public String removeTask(String description) {
+        Optional<Task> taskToRemove = tasks.stream()
+                .filter(task -> task.getDescription().equals(description))
+                .findFirst();
+
+        if (taskToRemove.isPresent()) {
+            tasks.remove(taskToRemove.get());
+            String message = "Task removed successfully.";
+            notifyObservers(message);
+            return message;
+        } else {
+            String message = "Error: Task not found.";
+            notifyObservers(message);
+            return message;
+        }
+    }
+
+    public String viewTasks() {
+        if (tasks.isEmpty()) {
+            return "No tasks scheduled for the day.";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Task task : tasks) {
+            sb.append(task.toString()).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private boolean isTimeConflict(Task newTask) {
+        for (Task existingTask : tasks) {
+            if (newTask.getStartTime().isBefore(existingTask.getEndTime()) &&
+                newTask.getEndTime().isAfter(existingTask.getStartTime())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void update(String message) {
+        notifyObservers(message);
+    }
+
+    public void addObserver(Observer observer) {
+        observers.add(observer);
+    }
+
+    public void removeObserver(Observer observer) {
+        observers.remove(observer);
+    }
+
+    private void notifyObservers(String message) {
+        for (Observer observer : observers) {
+            observer.update(message);
+        }
+    }
+}
+
+// TaskFactory class
+class TaskFactory {
+    public static Task createTask(String description, String startTime, String endTime, String priority) {
+        return new Task(description, startTime, endTime, priority);
+    }
+}
+
+// Example usage
+public class Main {
+    public static void main(String[] args) {
+        ScheduleManager manager = ScheduleManager.getInstance();
+
+        // Adding tasks
+        Task task1 = TaskFactory.createTask("Morning Exercise", "07:00", "08:00", "High");
+        Task task2 = TaskFactory.createTask("Team Meeting", "09:00", "10:00", "Medium");
+
+        System.out.println(manager.addTask(task1));
+        System.out.println(manager.addTask(task2));
+
+        // Viewing tasks
+        System.out.println("\nTasks:");
+        System.out.println(manager.viewTasks());
+
+        // Attempt to add a conflicting task
+        Task conflictingTask = TaskFactory.createTask("Training Session", "09:30", "10:30", "High");
+        System.out.println("\n" + manager.addTask(conflictingTask));
+
+        // Removing a task
+        System.out.println("\n" + manager.removeTask("Morning Exercise"));
+
+        // Viewing tasks after removal
+        System.out.println("\nTasks:");
+        System.out.println(manager.viewTasks());
+    }
+}
